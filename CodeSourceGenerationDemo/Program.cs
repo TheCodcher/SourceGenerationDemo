@@ -9,7 +9,8 @@ namespace CodeSourceGenerationDemo
         static void Main(string[] args)
         {
             Console.WriteLine("Hello World!");
-            //Console.WriteLine(ILog.Empty.MyProp);
+            Console.WriteLine(ILog.Empty.MyProp);
+            HelloWorldGenerated.HelloWorld.SayHello();
             Console.ReadKey();
         }
     }

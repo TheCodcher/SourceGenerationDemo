@@ -4,6 +4,7 @@ using System.Text;
 
 namespace CodeSourceGenerationDemo.MockInterfaceDemo
 {
+    [GenerateAttributes.EmptyImplementationAttribute]
     public partial interface ILog
     {
         object Sender { get; }
@@ -12,11 +13,11 @@ namespace CodeSourceGenerationDemo.MockInterfaceDemo
         bool Error { get; }
         string ToStringA()
         {
-            return "dfdfdf";
+            return "exempl";
         }
         string MyProp
         {
-            get => "fg";
+            get => "naice";
             set { return; }
         }
     }
