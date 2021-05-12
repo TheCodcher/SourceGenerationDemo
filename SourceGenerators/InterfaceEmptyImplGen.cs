@@ -27,54 +27,43 @@ namespace CodeSourceGenerationDemo.SourceGenerators
         ImmutableHashSet<INamedTypeSymbol> targetTypes;
         public void Execute(GeneratorExecutionContext context)
         {
+            var reciever = context.SyntaxReceiver as SyntaxReciver;
+            if (reciever is null) return;
+
             //закидываем атрибут
-            context.AddSource("EmptyImplementationAttribute", AttributeDiscription);
+            context.AddSource("EmptyImplementationAttribute.cs", AttributeDiscription);
 
             //подгружаем сборку с новым атрибутом
             CSharpParseOptions options = (context.Compilation as CSharpCompilation).SyntaxTrees[0].Options as CSharpParseOptions;
-            Compilation compilation = context.Compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(AttributeDiscription, Encoding.UTF8), options));
+            Compilation compilation = context.Compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(AttributeDiscription, options));
 
             //находим определение атрибута в сборке
             var attributeSymbol = compilation.GetTypeByMetadataName("GeneratedAttributes.EmptyImplementationAttribute");
 
-            //тут будут типы, с которыми предстоит работа
-            IEnumerable<INamedTypeSymbol> target = Enumerable.Empty<INamedTypeSymbol>();
+            //првоеряем, нужно ли продолжать работать перед длительной опирацией
+            context.CancellationToken.ThrowIfCancellationRequested();
 
-            //обходим все файлы в проекте
-            foreach (var syntaxTree in compilation.SyntaxTrees)
-            {
-                //переходим от текста к модели файла
-                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+            //получаем все подходящие интерфейсы из ресивера
+            targetTypes = reciever.TargetInterfaces
 
-                //проходим по всем синтаксическим нодам в файле
-                var types = syntaxTree.GetRoot().DescendantNodesAndSelf()
+                //переходим к их семантической модели
+                .Select(x => compilation.GetSemanticModel(x.SyntaxTree).GetDeclaredSymbol(x))
 
-                    //интересуют только интерфейсы
-                    .OfType<InterfaceDeclarationSyntax>()
+                //проверяем наличие необходимого атрибута
+                //.Where(x => x.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)))
 
-                    //только partial интерфейсы
-                    .Where(x => x.Modifiers.Any(SyntaxKind.PartialKeyword))
-
-                    //переходим от текстового описания интерфейса к его симантике
-                    .Select(x => semanticModel.GetDeclaredSymbol(x))
-
-                    //проверяем на наличие необходимого атрибута
-                    .Where(x => x.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)));
-
-                //добавляем все интерфейсы к нашему перечислению
-                target = target.Concat(types);
-            }
-
-            //вычисляем инумератор
-            targetTypes = target.ToImmutableHashSet();
+                //выполняем все действия выше
+                .ToImmutableHashSet();
 
             foreach (var targetType in targetTypes)
             {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
                 //генерируем код для каждого выбранного интерфейса
                 var source = GenerateEmptyImplType(targetType);
 
                 //добавляем сгенерированный код в сборку
-                context.AddSource($"{targetType.Name}_EmptyImplementation", source);
+                context.AddSource($"{targetType.Name}.EmptyImplementation.cs", source);
             }
         }
 
@@ -82,20 +71,19 @@ namespace CodeSourceGenerationDemo.SourceGenerators
         {
             //создаем по шаблону соответствующий тип
             return $@"
-                using System;
-
-                namespace {typeSymbol.ContainingNamespace.Name}
+            using System;
+            namespace {typeSymbol.ContainingNamespace}
+            {{
+                public partial interface {typeSymbol.Name}
                 {{
-                    partial interface {typeSymbol.Name}
+                    public static {typeSymbol.Name} Empty = new {typeSymbol.Name}EmptyImplementation();
+                    private class {typeSymbol.Name}EmptyImplementation : {typeSymbol.Name}
                     {{
-                        public static {typeSymbol.Name} Empty = new {typeSymbol.Name}EmptyImplementation();
-                        private class {typeSymbol.Name}EmptyImplementation : {typeSymbol.Name}
-                        {{
-                            {GenerateProperties(typeSymbol)}
-                            {GenerateMethods(typeSymbol)}
-                        }}
+                        {GenerateProperties(typeSymbol)}
+                        {GenerateMethods(typeSymbol)}
                     }}
-                }}";
+                }}
+            }}";
         }
 
         private string GenerateProperties(INamedTypeSymbol typeSymbol)
@@ -121,7 +109,7 @@ namespace CodeSourceGenerationDemo.SourceGenerators
                 var setter = symb.SetMethod != null ? "set;" : "";
 
                 //определяем инициализацию свойства
-                var init = targetTypes.Contains(symb.Type) ? $" = {symb.Type.Name}.Empty;" : "";
+                var init = targetTypes.Contains(symb.Type) ? $" = {symb.Type}.Empty;" : "";
 
                 //соединяем все в c# код
                 var prop = $"public {symb.Type} {symb.Name} {{{getter}{setter}}}{init}";
@@ -173,7 +161,7 @@ namespace CodeSourceGenerationDemo.SourceGenerators
             foreach (var symb in methodEnumer)
             {
                 var refMod = symb.ReturnsByRef ? "ref " : "";
-                var returnText = symb.ReturnsVoid ? "" : targetTypes.Contains(symb.ReturnType) ? $"return {refMod}{symb.ReturnType.Name}.Empty; " : $"return {refMod}default; ";
+                var returnText = symb.ReturnsVoid ? "" : targetTypes.Contains(symb.ReturnType) ? $"return {refMod}{symb.ReturnType}.Empty; " : $"return {refMod}default; ";
                 var returnSignature = symb.ReturnsVoid ? "void" : symb.ReturnType.ToString();
                 var methd = $"public {refMod}{returnSignature} {symb.Name}({ParamString(symb)}) {{ {returnText}}}";
                 builder.AppendLine(methd);
@@ -191,8 +179,26 @@ namespace CodeSourceGenerationDemo.SourceGenerators
                 Debugger.Launch();
             }
 #endif
+            context.RegisterForSyntaxNotifications(() => new SyntaxReciver());
             //пока ничего
         }
+
+        class SyntaxReciver : ISyntaxReceiver
+        {
+            public readonly List<InterfaceDeclarationSyntax> TargetInterfaces = new List<InterfaceDeclarationSyntax>();
+            public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
+            {
+                var node = syntaxNode as InterfaceDeclarationSyntax;
+                if (node != null)
+                {
+                    if (node.Modifiers.Any(SyntaxKind.PartialKeyword) && node.AttributeLists.Any())
+                    {
+                        TargetInterfaces.Add(node);
+                    }
+                };
+            }
+        }
+
     }
 }
 

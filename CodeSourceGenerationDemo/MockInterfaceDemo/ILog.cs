@@ -4,14 +4,14 @@ using System.Text;
 
 namespace CodeSourceGenerationDemo.MockInterfaceDemo
 {
-    [GenerateAttributes.EmptyImplementationAttribute]
+    //[GenerateAttributes.EmptyImplementationAttribute]
     public partial interface ILog
     {
         object Sender { get; }
         DateTime LogTime { get; }
         string Message { get; set; }
         bool Error { get; }
-        string ToStringA()
+        string ExempleRealization()
         {
             return "exempl";
         }
