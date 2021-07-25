@@ -24,9 +24,13 @@ namespace CodeSourceGenerationDemo.SourceGenerators
             public class EmptyImplementationAttribute : Attribute { }
         }";
 
+        //нужно для комфортного дебага
+        const bool USE_ATTRIBUTE_CHECK = true;
+
         ImmutableHashSet<INamedTypeSymbol> targetTypes;
         public void Execute(GeneratorExecutionContext context)
         {
+            //return;
             var reciever = context.SyntaxReceiver as SyntaxReciver;
             if (reciever is null) return;
 
@@ -44,16 +48,19 @@ namespace CodeSourceGenerationDemo.SourceGenerators
             context.CancellationToken.ThrowIfCancellationRequested();
 
             //получаем все подходящие интерфейсы из ресивера
-            targetTypes = reciever.TargetInterfaces
+            var temptargetTypes = reciever.TargetInterfaces
 
                 //переходим к их семантической модели
-                .Select(x => compilation.GetSemanticModel(x.SyntaxTree).GetDeclaredSymbol(x))
+                .Select(x => compilation.GetSemanticModel(x.SyntaxTree).GetDeclaredSymbol(x));
 
+            if (USE_ATTRIBUTE_CHECK)
+            {
                 //проверяем наличие необходимого атрибута
-                //.Where(x => x.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)))
+                temptargetTypes = temptargetTypes.Where(x => x.GetAttributes().Any(ad => ad.AttributeClass.Equals(attributeSymbol, SymbolEqualityComparer.Default)));
+            }
 
-                //выполняем все действия выше
-                .ToImmutableHashSet();
+            //выполняем все действия выше
+            targetTypes = temptargetTypes.ToImmutableHashSet();
 
             foreach (var targetType in targetTypes)
             {
@@ -173,12 +180,12 @@ namespace CodeSourceGenerationDemo.SourceGenerators
         public void Initialize(GeneratorInitializationContext context)
         {
             //В режиме дебага можно поставить точку останова и продебажить анализатор кода
-#if DEBUG
-            if (!Debugger.IsAttached)
-            {
-                Debugger.Launch();
-            }
-#endif
+//#if DEBUG
+            //if (!Debugger.IsAttached)
+            //{
+            //    Debugger.Launch();
+            //}
+//#endif
             context.RegisterForSyntaxNotifications(() => new SyntaxReciver());
             //пока ничего
         }
@@ -191,9 +198,19 @@ namespace CodeSourceGenerationDemo.SourceGenerators
                 var node = syntaxNode as InterfaceDeclarationSyntax;
                 if (node != null)
                 {
-                    if (node.Modifiers.Any(SyntaxKind.PartialKeyword) && node.AttributeLists.Any())
+                    if (node.Modifiers.Any(SyntaxKind.PartialKeyword))
                     {
-                        TargetInterfaces.Add(node);
+                        if (USE_ATTRIBUTE_CHECK)
+                        {
+                            if (node.AttributeLists.Any())
+                            {
+                                TargetInterfaces.Add(node);
+                            }
+                        }
+                        else
+                        {
+                            TargetInterfaces.Add(node);
+                        }
                     }
                 };
             }

@@ -4,7 +4,7 @@ using System.Text;
 
 namespace CodeSourceGenerationDemo.MockInterfaceDemo
 {
-    //[GenerateAttributes.EmptyImplementationAttribute]
+    [GeneratedAttributes.EmptyImplementation]
     public partial interface ILog
     {
         object Sender { get; }
