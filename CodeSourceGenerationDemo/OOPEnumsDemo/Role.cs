@@ -12,13 +12,13 @@ namespace CodeSourceGenerationDemo.OOPEnumsDemo
         public readonly int Color;
         public readonly string Prefix;
 
-        public Role()
+        private Role()
         {
             Title = "None";
             Color = (int)ConsoleColor.White;
             Prefix = "";
         }
-        public Role(string name = "", int color = 0, string pref = "")
+        private Role(string name = "", int color = 0, string pref = "")
         {
             Title = name;
             Color = color;
