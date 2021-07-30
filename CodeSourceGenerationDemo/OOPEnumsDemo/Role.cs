@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 using System.ObjectiveEnum;
+using System.Linq;
+using System.Reflection;
 
 namespace CodeSourceGenerationDemo.OOPEnumsDemo
 {

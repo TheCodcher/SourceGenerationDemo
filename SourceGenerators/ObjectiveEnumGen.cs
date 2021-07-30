@@ -31,14 +31,20 @@ namespace CodeSourceGenerationDemo.SourceGenerators
         using System.Reflection;
         namespace System.ObjectiveEnum
         {
+            public interface IObjectiveEnum
+            {
+                string Name { get; }
+                int Ordinal { get; }
+            }
             public static class ObjectiveEnum
             {
                 private static Type GetEnum(Type type)
                 {
                     var attribute = type.GetCustomAttribute<System.ObjectiveEnum.ObjectiveEnumAttribute>();
+                    var interfaceDecl = type.GetInterface(nameof(IObjectiveEnum));
                     var declaredmembers = type.GetTypeInfo().DeclaredNestedTypes;
                     var nested = declaredmembers.SingleOrDefault(t => t.Name == ""Enum"").AsType();
-                    var has = attribute != null && nested != null;
+                    var has = attribute != null && nested != null && interfaceDecl != null;
                     if (has)
                     {
                         System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
@@ -144,6 +150,22 @@ namespace CodeSourceGenerationDemo.SourceGenerators
                 }
                 public static bool Exists<T>(string name) where T : class => Exists(typeof(T), name);
                 public static bool Exists<T>(int ordinal) where T : class => Exists(typeof(T), ordinal);
+                public static bool HasFlag(int flags, int flag)
+                {
+                    return (flag & flags) == flag;
+                }
+                public static T[] GetFlags<T>(int flags) where T: class
+                {
+                    return GetFlagsByEnumerable(typeof(T), flags).OfType<T>().ToArray();
+                }
+                public static Array GetFlags(Type type, int flags)
+                {
+                    return GetFlagsByEnumerable(type, flags).ToArray();
+                }
+                private static IEnumerable<IObjectiveEnum> GetFlagsByEnumerable(Type type, int flags)
+                {
+                    return ObjectiveEnum.GetValues(type).OfType<IObjectiveEnum>().Where(e => HasFlag(flags, e.Ordinal));
+                }
             }
         }";
 
@@ -289,11 +311,13 @@ namespace CodeSourceGenerationDemo.SourceGenerators
             using System.ObjectiveEnum;
             namespace {semanticSymb.ContainingNamespace}
             {{
-                sealed partial {typeSymbolDeclarationType} {typeName}
+                sealed partial {typeSymbolDeclarationType} {typeName} : IObjectiveEnum
                 {{
                     {GenerateFields(typeName, prepared.EnumNames)}
                     
                     {GenTypeFlow(typeName)}
+                    string IObjectiveEnum.Name => Name;
+                    int IObjectiveEnum.Ordinal => Ordinal;
 
                     {GenToStringMeth(typeSymbol.Semantic)}
 
@@ -340,60 +364,7 @@ namespace CodeSourceGenerationDemo.SourceGenerators
         {
             return $@"
             private static int lastOrd = 0;
-            private static Action<int> SetField(string name, params object[] ctorParam)
-            {{
-                var type = typeof({typeName});
-                var value = Activator.CreateInstance(type, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, ctorParam, null) as {typeName};
-                if (!CheckFree(name))
-                {{
-                    throw new InvalidOperationException($""object with name \""{{name}}\"" has already been added"");
-                }}
-                var ord = GetFreeOrdinal();
-                type.GetRuntimeField(""Ordinal"").SetValue(value, ord);
-                type.GetRuntimeField(""Name"").SetValue(value, name);
-                byname.Add(name, value);
-                byord.Add(ord, value);
-                return SetOrdinal(value, type);
-            }}
-            private static bool CheckFree(int ordinal)
-            {{
-                return !byord.ContainsKey(ordinal);
-            }}
-            private static bool CheckFree(string name)
-            {{
-                return !byname.ContainsKey(name);
-            }}
-            private static int GetFreeOrdinal()
-            {{
-                for (int i = lastOrd; i < int.MaxValue; i++)
-                {{
-                    if (CheckFree(i))
-                    {{
-                        lastOrd = i + 1;
-                        return i;
-                    }}
-                }}
-                throw new IndexOutOfRangeException();
-            }}
-            private static Action<int> SetOrdinal({typeName} value, Type type)
-            {{
-                return i =>
-                {{
-                    if (i < 0) throw new ArgumentException(""ordinal cant be less then zero"");
-                    if (CheckFree(i))
-                    {{
-                        lastOrd = i == int.MaxValue ? int.MaxValue : i + 1;
-                        byord.Remove(value.Ordinal);
-                        byord.Add(i, value);
-                        type.GetRuntimeField(""Ordinal"").SetValue(value, i);
-                    }}
-                    else
-                    {{
-                        if (byord[i].GetHashCode() == value.GetHashCode()) return;
-                        throw new InvalidOperationException($""object with ordinal {{i}} has already been added"");
-                    }}
-                }};
-            }}
+           
             public static {typeName} GetByName(string name)
             {{
                 return byname[name];

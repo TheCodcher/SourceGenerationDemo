@@ -62,9 +62,8 @@ namespace CodeSourceGenerationDemo
         }
         private static void Example2()
         {
-
             var someData = new[]
-{
+            {
                 new User { Name = "Roma", Roles = Role.Owner },
                 new User { Name = "Lime", Roles = Role.Moderator|Role.Admin },
                 new User { Name = "Can you ask a question?", Roles = Role.User }
@@ -77,8 +76,7 @@ namespace CodeSourceGenerationDemo
 
             void LogModeratorAccess(User user)
             {
-                var values = ObjectiveEnum.GetValues<Role>() as Role[];
-                var max = (Role)values.Where(v => (v & user.Roles) == v).Max(v => v.Ordinal);
+                var max = (Role)ObjectiveEnum.GetFlags<Role>(user.Roles).Max(v => v.Ordinal);
                 Console.ForegroundColor = (ConsoleColor)max.Color;
                 if (user.Roles >= Role.Moderator)
                 {
