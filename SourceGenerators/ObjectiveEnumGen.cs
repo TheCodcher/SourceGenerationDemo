@@ -613,6 +613,10 @@ namespace CodeSourceGenerationDemo.SourceGenerators
             {
                 return string.Join(", ", symb.ParameterList.Parameters.Select(p => p.Identifier));
             }
+            public string ToStringValuesAndKeywords()
+            {
+                return string.Join(", ", symb.ParameterList.Parameters.Select(p => $"{p.Modifiers} {p.Identifier}"));
+            }
         }
     }
 }
